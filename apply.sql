@@ -6,23 +6,21 @@ declare
     hunk text[];
     context text[]; -- only contains consecutive lines in LCS
     in_hunk boolean := FALSE;
-    hunk_start int := 1;
+    --hunk_start int := 1;
     hunk_lines_added int := 0;
     hunk_lines_deleted int := 0;
     hunk_lines_context int := 0;
-    ary1 text[];
-    ary2 text[];
-    LCS text[];
-    line1 text;
-    line2 text;
-    lineLCS text;
-    ptr1 int := 1;
-    ptr2 int := 1;
-    ptrLCS int := 1;
+    X text[];
+    Y text[];
+    Xline text;
+    Yline text;
+    C int[][];
+    i int;
+    j int;
 begin
     SELECT * INTO latest FROM page_latest WHERE id = page_id;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Page % not found', id;
+        RAISE notice 'Page % not found', id;
     END IF;
     new_revision := latest.revision + 1;
     raise notice 'new revision: %', new_revision;
@@ -30,16 +28,19 @@ begin
     INSERT INTO page_diff (page_id, revision, editor, comment)
         VALUES (page_id, latest.revision, latest.editor, latest.comment);
     -- make hunks
-    ary1 := string_to_array(latest.content, E'\n');
-    ary2 := string_to_array(new_content, E'\n');
-    raise notice 'About to determine longest common substring';
-    LCS := lcs(ary1, ary2);
-    raise notice 'Longest common substring determined';
-    line1 := ary1[ptr1];
-    line2 := ary2[ptr2];
-    lineLCS := LCS[ptrLCS];
-    LOOP
-        if line1 is null and line2 is null and lineLCS is null then
+    X := string_to_array(latest.content, E'\n');
+    Y := string_to_array(new_content, E'\n');
+    i := array_length(X, 1) + 1;
+    j := array_length(Y, 1) + 1;
+    --hunk_start := i;
+    raise notice 'Determining longest common substring table...';
+    C := lcs_length(X, Y);
+    raise notice 'Longest common substring table determined.';
+    LOOP -- moving backwards
+        raise notice 'i = %, j = %', i, j;
+        raise notice 'context = %', context;
+        raise notice 'hunk = %', hunk;
+        if i = 1 or j = 1 then
             -- we're done!
             IF in_hunk THEN
                 IF array_length(context, 1) IS NOT NULL THEN
@@ -51,29 +52,34 @@ begin
                 INSERT INTO page_diff_hunk (page_id, revision, start, 
                     content, lines_added, lines_deleted, lines_context)
                     VALUES 
-                    (page_id, latest.revision, hunk_start, array_to_string(hunk, E'\n'),
+                    (page_id, latest.revision, i, array_to_string(hunk, E'\n'),
                     hunk_lines_added, hunk_lines_deleted, hunk_lines_context);
             END IF;
             -- update the page_latest object
             UPDATE page_latest SET content = new_content, revision = new_revision,
-                num_lines = array_length(ary2, 1), comment = new_comment,
+                num_lines = array_length(Y, 1), comment = new_comment,
                 editor = editor_id, edited_on = now()
                 WHERE id = page_id;
             return new_revision;
         end if;
+        Xline := X[i-1];
+        Yline := Y[j-1];
+        raise notice 'Xline = %', Xline;
+        raise notice 'Yline = %', Yline;
         -- handle same line
-        if line1 = lineLCS and line2 = lineLCS then
-            raise notice 'equal lines: %', lineLCS;
+        if Xline = Yline THEN
+            raise notice 'equal lines: %, %', Xline, Yline;
             IF NOT in_hunk THEN
                 -- LIFO queue
                 IF array_length(context, 1) < context_len THEN
-                    context := context || (' ' || lineLCS);
+                    -- prepend to context array
+                    context := (' ' || Xline) || context;
                     hunk_lines_context := hunk_lines_context + 1;
                 ELSE
-                    context := context[2:context_len] || (' ' || lineLCS);
+                    context := (' ' || Xline) || context[2:context_len];
                 END IF;
             ELSE
-                context := context || (' ' || lineLCS);
+                context := (' ' || Xline) || context;
                 hunk_lines_context := hunk_lines_context + 1;
                 -- are we done with this hunk?
                 IF array_length(context, 1) = context_len THEN
@@ -81,7 +87,7 @@ begin
                     INSERT INTO page_diff_hunk (page_id, revision, start, 
                         content, lines_added, lines_deleted, lines_context)
                         VALUES 
-                        (page_id, latest.revision, hunk_start, array_to_string(hunk, E'\n'),
+                        (page_id, latest.revision, i, array_to_string(hunk, E'\n'),
                         hunk_lines_added, hunk_lines_deleted, hunk_lines_context);
                     -- and reset
                     hunk := array[]::text[];
@@ -92,12 +98,8 @@ begin
                     hunk_lines_context := 0;
                 END IF;
             END IF;
-            ptr1 := ptr1 + 1;
-            ptr2 := ptr2 + 1;
-            ptrLCS := ptrLCS + 1;
-            line1 := ary1[ptr1];
-            line2 := ary2[ptr2];
-            lineLCS := LCS[ptrLCS];
+            i := i - 1;
+            j := j - 1;
             continue; -- skip the rest of this function and go on
         end if;
         -- reset context array
@@ -105,42 +107,34 @@ begin
             -- start a new hunk
             hunk = context;
             in_hunk = TRUE;
-            IF ptr1 > context_len THEN
-                hunk_start = ptr1 - context_len;
-            ELSE
-                IF array_length(context, 1) IS NULL THEN
-                    hunk_start = ptr1;
-                ELSE
-                    hunk_start = ptr1 - array_length(context, 1);
-                END IF;
-            END IF;
         ELSE
             IF array_length(context, 1) IS NOT NULL THEN
-                -- add context to hunk
-                hunk := hunk || context;
+                -- prepend context to hunk
+                hunk := context || hunk;
                 hunk_lines_context := hunk_lines_context + array_length(context, 1);
             END IF;
         END IF;
         context := array[]::text[];
         -- done resetting context; handle addition and deletion
-        if line1 is not null and (line1 != lineLCS or lineLCS is null) then
+        --if line1 is not null and (line1 != lineLCS or lineLCS is null) then
+        if C[i][j-1] > C[i-1][j] THEN
+            raise notice 'deleted: %', Xline;
             -- must have been deleted
-            hunk := hunk || ('-' || line1);
-            ptr1 := ptr1 + 1;
-            line1 := ary1[ptr1];
+            hunk := ('-' || Xline) || hunk;
             hunk_lines_deleted := hunk_lines_deleted + 1;
+            j := j - 1;
             continue;
-        end if;
-        if line2 is not null and (line2 != lineLCS or lineLCS is null) then
+        --end if;
+        --if line2 is not null and (line2 != lineLCS or lineLCS is null) then
+        ELSE
+            raise notice 'added: %', Yline;
             -- must have been added
-            hunk := hunk || ('+' || line2);
-            ptr2 := ptr2 + 1;
-            line2 := ary2[ptr2];
+            hunk := ('+' || Yline) || hunk;
             hunk_lines_added := hunk_lines_added + 1;
+            i := i - 1;
             continue;
         end if;
     END LOOP;
 end;
 $$ language plpgsql
 VOLATILE STRICT;
-
