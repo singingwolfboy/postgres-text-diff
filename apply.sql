@@ -44,10 +44,15 @@ begin
         if i = 1 or j = 1 then
             -- we're done!
             IF in_hunk THEN
-                IF array_length(context, 1) IS NOT NULL THEN
+                context_length := array_length(context, 1);
+                IF context_length IS NOT NULL THEN
+                    IF context_length > context_len THEN
+                        context := context[1:context_len];
+                        context_length = context_len;
+                    END IF;
                     -- prepend context to hunk
                     hunk := context || hunk;
-                    hunk_lines_context := hunk_lines_context + array_length(context, 1);
+                    hunk_lines_context := hunk_lines_context + context_length;
                 END IF;
                 -- write out the last hunk
                 INSERT INTO page_diff_hunk (page_id, revision, start, 
@@ -86,9 +91,11 @@ begin
                 raise notice 'context whoa = %', context;
                 -- hunk_lines_context := hunk_lines_context + 1;
                 -- are we done with this hunk?
-                IF array_length(context, 1) = context_len THEN
+                -- we need to check up until twice the context_len, because of
+                -- pathological splitting case
+                IF array_length(context, 1) = 2*context_len THEN
                     -- prepend context to hunk
-                    hunk := context || hunk;
+                    hunk := context[context_len+1:2*context_len] || hunk;
                     hunk_lines_context = hunk_lines_context + context_len;
                     -- write out the hunk
                     INSERT INTO page_diff_hunk (page_id, revision, start, 
@@ -98,7 +105,7 @@ begin
                         hunk_lines_added, hunk_lines_deleted, hunk_lines_context);
                     -- and reset
                     hunk := array[]::text[];
-                    context := array[]::text[];
+                    context := context[1:context_len];
                     in_hunk := FALSE;
                     hunk_lines_added := 0;
                     hunk_lines_deleted := 0;
