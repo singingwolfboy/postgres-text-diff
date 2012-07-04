@@ -6,7 +6,6 @@ declare
     hunk text[];
     context text[]; -- only contains consecutive lines in LCS
     in_hunk boolean := FALSE;
-    --hunk_start int := 1;
     hunk_lines_added int := 0;
     hunk_lines_deleted int := 0;
     hunk_lines_context int := 0;
@@ -44,8 +43,8 @@ begin
             -- we're done!
             IF in_hunk THEN
                 IF array_length(context, 1) IS NOT NULL THEN
-                    -- add context to hunk
-                    hunk := hunk || context;
+                    -- prepend context to hunk
+                    hunk := context || hunk;
                     hunk_lines_context := hunk_lines_context + array_length(context, 1);
                 END IF;
                 -- write out the last hunk
@@ -74,13 +73,13 @@ begin
                 IF array_length(context, 1) < context_len THEN
                     -- prepend to context array
                     context := (' ' || Xline) || context;
-                    hunk_lines_context := hunk_lines_context + 1;
+                    -- hunk_lines_context := hunk_lines_context + 1;
                 ELSE
                     context := (' ' || Xline) || context[2:context_len];
                 END IF;
             ELSE
                 context := (' ' || Xline) || context;
-                hunk_lines_context := hunk_lines_context + 1;
+                -- hunk_lines_context := hunk_lines_context + 1;
                 -- are we done with this hunk?
                 IF array_length(context, 1) = context_len THEN
                     -- write out the hunk
@@ -107,6 +106,9 @@ begin
             -- start a new hunk
             hunk = context;
             in_hunk = TRUE;
+            IF array_length(context, 1) IS NOT NULL THEN
+                hunk_lines_context := hunk_lines_context + array_length(context, 1);
+            END IF;
         ELSE
             IF array_length(context, 1) IS NOT NULL THEN
                 -- prepend context to hunk
@@ -116,21 +118,18 @@ begin
         END IF;
         context := array[]::text[];
         -- done resetting context; handle addition and deletion
-        --if line1 is not null and (line1 != lineLCS or lineLCS is null) then
         if C[i][j-1] > C[i-1][j] THEN
-            raise notice 'deleted: %', Xline;
-            -- must have been deleted
-            hunk := ('-' || Xline) || hunk;
-            hunk_lines_deleted := hunk_lines_deleted + 1;
-            j := j - 1;
-            continue;
-        --end if;
-        --if line2 is not null and (line2 != lineLCS or lineLCS is null) then
-        ELSE
             raise notice 'added: %', Yline;
             -- must have been added
             hunk := ('+' || Yline) || hunk;
             hunk_lines_added := hunk_lines_added + 1;
+            j := j - 1;
+            continue;
+        ELSE
+            raise notice 'deleted: %', Xline;
+            -- must have been deleted
+            hunk := ('-' || Xline) || hunk;
+            hunk_lines_deleted := hunk_lines_deleted + 1;
             i := i - 1;
             continue;
         end if;
