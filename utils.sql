@@ -34,7 +34,6 @@ begin
             END IF;
         end loop;
     end loop;
-    raise notice '%', C;
     RETURN C;
 end;
 $$ language plpgsql
