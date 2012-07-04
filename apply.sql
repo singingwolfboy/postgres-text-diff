@@ -5,6 +5,7 @@ declare
     new_revision int;
     hunk text[];
     context text[]; -- only contains consecutive lines in LCS
+    context_length int;
     in_hunk boolean := FALSE;
     hunk_lines_added int := 0;
     hunk_lines_deleted int := 0;
@@ -35,10 +36,11 @@ begin
     raise notice 'Determining longest common substring table...';
     C := lcs_length(X, Y);
     raise notice 'Longest common substring table determined.';
+    raise notice 'context_len = %', context_len;
     LOOP -- moving backwards
         raise notice 'i = %, j = %', i, j;
-        raise notice 'context = %', context;
         raise notice 'hunk = %', hunk;
+        raise notice 'context here = %', context;
         if i = 1 or j = 1 then
             -- we're done!
             IF in_hunk THEN
@@ -75,18 +77,24 @@ begin
                     context := (' ' || Xline) || context;
                     -- hunk_lines_context := hunk_lines_context + 1;
                 ELSE
-                    context := (' ' || Xline) || context[2:context_len];
+                    -- pull the last one off before you stick the new one in front
+                    raise notice 'sliced context = %', context[1:context_len-1];
+                    context := (' ' || Xline) || context[1:context_len-1];
                 END IF;
             ELSE
                 context := (' ' || Xline) || context;
+                raise notice 'context whoa = %', context;
                 -- hunk_lines_context := hunk_lines_context + 1;
                 -- are we done with this hunk?
                 IF array_length(context, 1) = context_len THEN
+                    -- prepend context to hunk
+                    hunk := context || hunk;
+                    hunk_lines_context = hunk_lines_context + context_len;
                     -- write out the hunk
                     INSERT INTO page_diff_hunk (page_id, revision, start, 
                         content, lines_added, lines_deleted, lines_context)
                         VALUES 
-                        (page_id, latest.revision, i, array_to_string(hunk, E'\n'),
+                        (page_id, latest.revision, i-1, array_to_string(hunk, E'\n'),
                         hunk_lines_added, hunk_lines_deleted, hunk_lines_context);
                     -- and reset
                     hunk := array[]::text[];
@@ -102,18 +110,20 @@ begin
             continue; -- skip the rest of this function and go on
         end if;
         -- reset context array
+        context_length := array_length(context, 1);
+        raise notice 'context there = %', context;
         IF NOT in_hunk THEN
             -- start a new hunk
             hunk = context;
             in_hunk = TRUE;
-            IF array_length(context, 1) IS NOT NULL THEN
-                hunk_lines_context := hunk_lines_context + array_length(context, 1);
+            IF context_length IS NOT NULL THEN
+                hunk_lines_context := context_length;
             END IF;
         ELSE
-            IF array_length(context, 1) IS NOT NULL THEN
+            IF context_length IS NOT NULL THEN
                 -- prepend context to hunk
                 hunk := context || hunk;
-                hunk_lines_context := hunk_lines_context + array_length(context, 1);
+                hunk_lines_context := hunk_lines_context + context_length;
             END IF;
         END IF;
         context := array[]::text[];
