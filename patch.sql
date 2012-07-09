@@ -27,7 +27,7 @@ begin
     hunk_line := hunk[hunk_ptr];
 
     LOOP
-        RAISE notice 'op = %, hp = %, ol = %, hl = %', orig_ptr, hunk_ptr, orig_line, hunk_line;
+        --RAISE notice 'op = %, hp = %, ol = %, hl = %', orig_ptr, hunk_ptr, orig_line, hunk_line;
         IF hunk_line IS NULL THEN
             -- End of the hunk. Wrap up the rest, and leave.
             RETURN result || original[orig_ptr:orig_length];
@@ -76,3 +76,63 @@ begin
 end;
 $$ language plpgsql
 IMMUTABLE;
+
+create or replace function get_page_at_revision(page_id int, revision int)
+--    returns page as $$
+    returns page_latest as $$
+#variable_conflict use_variable
+declare
+    latest page_latest;
+    diff page_diff;
+    hunk page_diff_hunk;
+    content text[];
+    cur_rev int := -1;
+    line_offset int := 0;
+    result page_latest;
+begin
+    IF revision < 1 THEN
+        RAISE 'Revision must be positive (got %)', revision;
+    END IF;
+    SELECT * INTO latest FROM page_latest WHERE id = page_id;
+    IF NOT FOUND THEN
+        RAISE 'Page % not found', id;
+    END IF;
+    IF revision > latest.revision THEN
+        RAISE 'Revision does not exist (requested %, latest is %)', revision,
+            latest.revision;
+    END IF;
+    IF revision = latest.revision THEN
+        result := latest::page_latest;
+        RETURN result;
+    END IF;
+    SELECT * INTO diff FROM page_diff AS pd
+        WHERE pd.page_id = page_id
+        AND pd.revision = revision;
+    IF NOT FOUND THEN
+        RAISE 'Revision % for page % not found', revision, page_id;
+    END IF;
+    content = string_to_array(latest.content, E'\n');
+    FOR hunk IN SELECT * FROM page_diff_hunk AS pdh 
+                WHERE pdh.page_id = page_id
+                AND pdh.revision >= revision
+                ORDER BY pdh.revision desc, pdh.start asc
+    LOOP
+        IF cur_rev != hunk.revision THEN
+            line_offset := 0;
+            cur_rev := hunk.revision;
+        END IF;
+        --raise notice 'start = %, offset = %, rev = %', hunk.start, line_offset, cur_rev;
+        content := apply_hunk(content,
+            string_to_array(hunk.content, E'\n'),
+            hunk.start + line_offset,
+            TRUE);
+        line_offset := line_offset + hunk.lines_added - hunk.lines_deleted;
+    END LOOP;
+    result := (latest.id, latest.title, latest.slug, latest.namespace,
+        array_to_string(content, E'\n'), diff.comment,
+        array_length(content, 1), revision, diff.editor, latest.markup,
+        latest.language, diff.created_on);
+    RETURN result;
+end;
+$$ language plpgsql
+STABLE STRICT;

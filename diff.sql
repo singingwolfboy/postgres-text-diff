@@ -38,7 +38,7 @@ begin
         --raise notice 'i = %, j = %', i, j;
         --raise notice 'hunk = %', hunk;
         --raise notice 'context here = %', context;
-        if i = 1 or j = 1 then
+        if i = 1 and j = 1 then
             -- we're done!
             IF in_hunk THEN
                 context_length := array_length(context, 1);

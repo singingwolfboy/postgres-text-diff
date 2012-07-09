@@ -17,7 +17,7 @@ CREATE TABLE page_latest (
     content text DEFAULT '',
     comment text DEFAULT '',
     num_lines int NOT NULL,
-    revision int DEFAULT 0 CONSTRAINT "revision must be positive" CHECK (revision >= 0),
+    revision int DEFAULT 1 CONSTRAINT "revision must be positive" CHECK (revision > 0),
     editor int REFERENCES "user"(id),
     markup varchar(64) DEFAULT 'plain',
     language varchar(8) NOT NULL,
@@ -39,7 +39,7 @@ DROP TABLE IF EXISTS page_diff_hunk;
 CREATE TABLE page_diff_hunk (
     page_id int,
     revision int,
-    start int NOT NULL CONSTRAINT "start must be positive" CHECK (start >= 0),
+    start int NOT NULL CONSTRAINT "start must be positive" CHECK (start > 0),
     content text NOT NULL DEFAULT '',
     lines_added int NOT NULL DEFAULT 0,
     lines_deleted int NOT NULL DEFAULT 0,
