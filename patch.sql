@@ -1,4 +1,4 @@
-create or replace function apply_hunk(original text[], hunk text[],
+create or replace function wiki.apply_hunk(original text[], hunk text[],
     start int DEFAULT 1, reverse boolean DEFAULT FALSE) returns text[] as $$
 declare
     result text[];
@@ -77,23 +77,22 @@ end;
 $$ language plpgsql
 IMMUTABLE;
 
-create or replace function get_page_at_revision(page_id int, revision int)
---    returns page as $$
-    returns page_latest as $$
+create or replace function wiki.get_page_at_revision(page_id int, revision int)
+    returns wiki.page as $$
 #variable_conflict use_variable
 declare
-    latest page_latest;
-    diff page_diff;
-    hunk page_diff_hunk;
+    latest wiki.page_latest;
+    diff wiki.page_diff;
+    hunk wiki.page_diff_hunk;
     content text[];
     cur_rev int := -1;
     line_offset int := 0;
-    result page_latest;
+    result page;
 begin
     IF revision < 1 THEN
         RAISE 'Revision must be positive (got %)', revision;
     END IF;
-    SELECT * INTO latest FROM page_latest WHERE id = page_id;
+    SELECT * INTO latest FROM wiki.page_latest WHERE id = page_id;
     IF NOT FOUND THEN
         RAISE 'Page % not found', id;
     END IF;
@@ -102,17 +101,17 @@ begin
             latest.revision;
     END IF;
     IF revision = latest.revision THEN
-        result := latest::page_latest;
+        result := latest::page;
         RETURN result;
     END IF;
-    SELECT * INTO diff FROM page_diff AS pd
+    SELECT * INTO diff FROM wiki.page_diff AS pd
         WHERE pd.page_id = page_id
         AND pd.revision = revision;
     IF NOT FOUND THEN
         RAISE 'Revision % for page % not found', revision, page_id;
     END IF;
     content = string_to_array(latest.content, E'\n');
-    FOR hunk IN SELECT * FROM page_diff_hunk AS pdh 
+    FOR hunk IN SELECT * FROM wiki.page_diff_hunk AS pdh 
                 WHERE pdh.page_id = page_id
                 AND pdh.revision >= revision
                 ORDER BY pdh.revision desc, pdh.start asc

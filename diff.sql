@@ -1,7 +1,8 @@
-create or replace function update_page(page_id int, new_content text, 
-    editor_id int, new_comment text DEFAULT '', context_len int DEFAULT 3) returns int as $$
+create or replace function wiki.update_page(page_id int, new_content text, 
+    editor_id int, new_comment text DEFAULT '', context_len int DEFAULT 3)
+    returns int as $$
 declare
-    latest page_latest;
+    latest wiki.page_latest;
     new_revision int;
     hunk text[];
     context text[]; -- only contains consecutive lines in LCS
@@ -18,14 +19,14 @@ declare
     i int;
     j int;
 begin
-    SELECT * INTO latest FROM page_latest WHERE id = page_id;
+    SELECT * INTO latest FROM wiki.page_latest WHERE id = page_id;
     IF NOT FOUND THEN
         RAISE 'Page % not found', id;
     END IF;
     new_revision := latest.revision + 1;
     --raise notice 'new revision: %', new_revision;
     -- write out new diff object
-    INSERT INTO page_diff (page_id, revision, editor, comment)
+    INSERT INTO wiki.page_diff (page_id, revision, editor, comment)
         VALUES (page_id, latest.revision, latest.editor, latest.comment);
     -- make hunks
     X := string_to_array(latest.content, E'\n');
@@ -55,14 +56,14 @@ begin
                     hunk_lines_context := hunk_lines_context + context_length;
                 END IF;
                 -- write out the last hunk
-                INSERT INTO page_diff_hunk (page_id, revision, start, 
+                INSERT INTO wiki.page_diff_hunk (page_id, revision, start, 
                     content, lines_added, lines_deleted, lines_context)
                     VALUES 
                     (page_id, latest.revision, i, array_to_string(hunk, E'\n'),
                     hunk_lines_added, hunk_lines_deleted, hunk_lines_context);
             END IF;
             -- update the page_latest object
-            UPDATE page_latest SET content = new_content, revision = new_revision,
+            UPDATE wiki.page_latest SET content = new_content, revision = new_revision,
                 num_lines = array_length(Y, 1), comment = new_comment,
                 editor = editor_id, edited_on = now()
                 WHERE id = page_id;
@@ -97,7 +98,7 @@ begin
                     hunk := context[context_len+1:2*context_len] || hunk;
                     hunk_lines_context = hunk_lines_context + context_len;
                     -- write out the hunk
-                    INSERT INTO page_diff_hunk (page_id, revision, start, 
+                    INSERT INTO wiki.page_diff_hunk (page_id, revision, start, 
                         content, lines_added, lines_deleted, lines_context)
                         VALUES 
                         (page_id, latest.revision, i-1, array_to_string(hunk, E'\n'),
