@@ -21,7 +21,7 @@ CREATE TABLE wiki.page_latest (
     comment text DEFAULT '',
     num_lines int NOT NULL,
     revision int DEFAULT 1 CONSTRAINT "revision must be positive" CHECK (revision > 0),
-    editor int REFERENCES wiki.editor(id),
+    editor_id int REFERENCES wiki.editor(id),
     markup varchar(64) DEFAULT 'plain',
     language varchar(8) NOT NULL,
     edited_on timestamp DEFAULT now() NOT NULL
@@ -31,7 +31,7 @@ DROP TABLE IF EXISTS wiki.page_diff CASCADE;
 CREATE TABLE wiki.page_diff (
     page_id int, 
     revision int,
-    editor int REFERENCES wiki.editor(id),
+    editor_id int REFERENCES wiki.editor(id),
     created_on timestamp DEFAULT now() NOT NULL,
     comment text DEFAULT '',
     PRIMARY KEY (page_id, revision),
@@ -84,6 +84,7 @@ CREATE OPERATOR && (
     commutator = &&
 );
 
+/*
 DROP TABLE IF EXISTS wiki.page;
 CREATE TABLE wiki.page (LIKE page_latest);
 
@@ -93,7 +94,7 @@ declare
     result wiki.page;
 begin
     result := ($1.id, $1.title, $1.slug, $1.namespace, $1.content, $1.comment,
-        $1.num_lines, $1.revision, $1.editor, $1.markup, $1.language,
+        $1.num_lines, $1.revision, $1.editor_id, $1.markup, $1.language,
         $1.edited_on);
     RETURN result;
 end;
@@ -101,3 +102,4 @@ $$ language plpgsql IMMUTABLE STRICT;
 
 CREATE CAST (wiki.page_latest AS wiki.page)
     WITH FUNCTION wiki.page_latest_to_page(wiki.page_latest);
+*/

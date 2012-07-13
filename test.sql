@@ -1,18 +1,18 @@
 truncate page_latest, page_diff, page_diff_hunk;
-INSERT INTO "user"(id, username, email) VALUES (1, 'foo', 'foo');
-INSERT INTO page_latest(id, title, slug, num_lines, editor, language, content)
+INSERT INTO wiki.editor(id, username, email) VALUES (1, 'foo', 'foo');
+INSERT INTO wiki.page_latest(id, title, slug, num_lines, editor_id, language, content)
     VALUES (1, 'page', 'page', 3, 1, 'en-us', 
 'a
 b
 c');
 
-SELECT update_page(1, 'b
+SELECT wiki.update_page(1, 'b
 c
 d', 1);
-SELECT update_page(1, 'c
+SELECT wiki.update_page(1, 'c
 d
 e', 1);
-SELECT update_page(1, 'd
+SELECT wiki.update_page(1, 'd
 e
 f', 1);
 

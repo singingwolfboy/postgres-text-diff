@@ -1,5 +1,5 @@
 create or replace function wiki.update_page(page_id int, new_content text, 
-    editor_id int, new_comment text DEFAULT '', context_len int DEFAULT 3)
+    new_editor_id int, new_comment text DEFAULT '', context_len int DEFAULT 3)
     returns int as $$
 declare
     latest wiki.page_latest;
@@ -26,8 +26,8 @@ begin
     new_revision := latest.revision + 1;
     --raise notice 'new revision: %', new_revision;
     -- write out new diff object
-    INSERT INTO wiki.page_diff (page_id, revision, editor, comment)
-        VALUES (page_id, latest.revision, latest.editor, latest.comment);
+    INSERT INTO wiki.page_diff (page_id, revision, editor_id, comment)
+        VALUES (page_id, latest.revision, latest.editor_id, latest.comment);
     -- make hunks
     X := string_to_array(latest.content, E'\n');
     Y := string_to_array(new_content, E'\n');
@@ -65,7 +65,7 @@ begin
             -- update the page_latest object
             UPDATE wiki.page_latest SET content = new_content, revision = new_revision,
                 num_lines = array_length(Y, 1), comment = new_comment,
-                editor = editor_id, edited_on = now()
+                editor_id = new_editor_id, edited_on = now()
                 WHERE id = page_id;
             return new_revision;
         end if;
