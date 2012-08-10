@@ -24,7 +24,9 @@ CREATE TABLE wiki.page_latest (
     editor_id int REFERENCES wiki.editor(id),
     markup varchar(64) DEFAULT 'plain',
     language varchar(8) NOT NULL,
-    edited_on timestamp DEFAULT now() NOT NULL
+    edited_on timestamp DEFAULT now() NOT NULL,
+    is_locked boolean DEFAULT FALSE NOT NULL,
+    is_deleted boolean DEFAULT FALSE NOT NULL
 );
 
 DROP TABLE IF EXISTS wiki.page_diff CASCADE;
@@ -83,23 +85,3 @@ CREATE OPERATOR && (
     procedure = wiki.hunk_overlap,
     commutator = &&
 );
-
-/*
-DROP TABLE IF EXISTS wiki.page;
-CREATE TABLE wiki.page (LIKE page_latest);
-
-CREATE OR REPLACE FUNCTION wiki.page_latest_to_page(wiki.page_latest)
-    returns wiki.page as $$
-declare
-    result wiki.page;
-begin
-    result := ($1.id, $1.title, $1.slug, $1.namespace, $1.content, $1.comment,
-        $1.num_lines, $1.revision, $1.editor_id, $1.markup, $1.language,
-        $1.edited_on);
-    RETURN result;
-end;
-$$ language plpgsql IMMUTABLE STRICT;
-
-CREATE CAST (wiki.page_latest AS wiki.page)
-    WITH FUNCTION wiki.page_latest_to_page(wiki.page_latest);
-*/
